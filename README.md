@@ -12,5 +12,13 @@ cd SolarTracker
 make
 ```
 
+## Test
+```
+bin/SolarTracker
+```
+
 ## Author
 [Ya-Liang Chang (Allen)](https://github.com/amjltc295/)
+
+## License
+MIT
