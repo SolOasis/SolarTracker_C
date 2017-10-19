@@ -6,16 +6,26 @@ CPPFLAGS := -O2 -I../lib
 all : directories executable
 
 debug: CPPFLAGS += -DDEBUG -g
-debug: directories executable
+debug: directories executable test
 
 directories :
 	@mkdir -p ../bin
 
-executable : ../bin/spa_tester
+executable : ../bin/SunTracker
+	@echo -n ""
+
+test : ../bin/spa_tester
 	@echo -n ""
 
 clean :
 	rm *.o ../bin/spa_tester
+	rm *.o ../bin/SunTracker
+
+../bin/SunTracker: SunTracker.o ../lib/spa.a
+	$(CXX) $^ -o $@
+	
+SunTracker.o : SunTracker.c
+	$(CXX) $(CPPFLAGS) -c $< -o $@
 
 ../bin/spa_tester: spa_tester.o ../lib/spa.a
 	$(CXX) $^ -o $@
