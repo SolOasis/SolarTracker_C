@@ -13,4 +13,4 @@ make
 ```
 
 ## Author
-Ya-Liang Chang(Allen)[amjltc295](https://github.com/amjltc295/)
+[Ya-Liang Chang (Allen)](https://github.com/amjltc295/)
