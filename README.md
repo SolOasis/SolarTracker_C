@@ -13,6 +13,7 @@ make
 ```
 
 ## Test
+After building with Makefile, run:
 ```
 bin/SolarTracker
 ```
