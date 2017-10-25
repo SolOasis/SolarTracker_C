@@ -18,7 +18,23 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include "../lib/spa.h"  //include the SPA header file
+
+//Update period of the solar tracker
+#define UPDATE_PEIORD 1800
+
+//2017 constants
+#define DELTA_UT1 0.3 
+#define DELTA_T 69.1
+
+//Pitt Benedum Hall constant 
+#define TIMEZONE -4 // Pittsburgh
+#define LONGITUDE -79.958767 // Pitt Benedum Hall
+#define LATITUDE 40.443651 // Pitt Benedum Hall
+#define HEIGHT 40 // Pitt Benedum Hall
 
 void print_help_message() {
     printf("***********************************************\n");
@@ -35,31 +51,53 @@ int main (int argc, char *argv[])
     print_help_message();
 
     spa_data spa;  //declare the SPA structure
-    int result;
-    float min, sec;
+    int result; // SPA result
+    float min, sec; // For sunrise/set
+    int yy, mm, dd, hr, mmin, ssec; // Desired time to calculate
+	float lo = LONGITUDE;
+	float la = LATITUDE;
+	float hei = HEIGHT;
+    char ans[100]; // Answer of yes/no
+	char buffer[100]; //for input
+    FILE *filePtr; // For recording sun location of the day
+    char filename[sizeof "output/20171024_lookup_table.txt"];
+    char location_result[100];
+    time_t t;
+    struct tm * timePtr;
 
-    //enter required input values into SPA structure
+	// Create output directory if not exists
+	struct stat st = {0};
+	if (stat("./output", &st) == -1) {
+    	mkdir("./output", 0700);
+	}
 
-    int yy, mm, dd, hr, mmin, ssec;
-    char ans;
-    printf("Using the current time?(y/n) ");
-    scanf("%c", &ans);
-    if (ans == 'y') {
+    // Enter required input values into SPA structure
+
+    printf("Using the current time? [y]");
+	fgets(ans, 100, stdin);
+	
+    //scanf("%c", &ans);
+    if (ans[0] == 'y' || ans[0] == '\n') {
+        t = time(0);   // get time now
+        timePtr = localtime( & t );
         //Using current time
-        time_t t = time(0);   // get time now
-        struct tm * timePtr = localtime( & t );
         yy = timePtr->tm_year + 1900;
         mm = timePtr->tm_mon + 1;
         dd = timePtr->tm_mday;
         hr = timePtr->tm_hour;
         mmin = timePtr->tm_min;
         ssec = timePtr->tm_sec;
-        printf("Using %4d-%02d-%02d %02d:%02d:%02d \n", 
-                yy, mm, dd, hr, mmin, ssec);
     } else {
         printf("Please input 'Year Month Day Hour Minute Second':");
         int input_num = scanf("%d %d %d %d %d %d", 
                 &yy, &mm, &dd, &hr, &mmin, &ssec);
+        timePtr->tm_year = yy - 1900;
+        timePtr->tm_mon = mm -1;
+        timePtr->tm_mday = dd;
+        timePtr->tm_hour = hr;
+        timePtr->tm_min = mmin;
+        timePtr->tm_sec = ssec;
+        mktime(timePtr);
 
         if (input_num != 6) {
             fprintf(stderr, "Invalid input.\n");
@@ -67,18 +105,37 @@ int main (int argc, char *argv[])
             exit(EXIT_FAILURE);
         }
     }
+    printf("Time: %4d-%02d-%02d %02d:%02d:%02d \n", 
+                yy, mm, dd, hr, mmin, ssec);
+    //f = fopen(("%4d-%02d-%02d %02d:%02d:%02d.txt", yy, mm, dd, hr, mmin, ssec), "ab+");
+    sprintf(filename, "output/%04d%02d%02d_lookup_table.txt", yy, mm, dd);
+    filePtr = fopen(filename, "w");
+    printf("Created %s \n\n", filename);
+
+	printf("Using current GPS location? [y]");
+	fgets(ans, 100, stdin);
+    //scanf("%c", &ans);
+    if (ans[0] != 'y' && ans[0] != '\n') {
+		printf("Input longitude: ");
+		scanf("%f", &lo);
+		printf("Input latitude: ");
+		scanf("%f", &la);
+	}
+	printf("Using GPS location (%6f, %6f)\n\n", lo, la);
+
+
     spa.year          = yy;
     spa.month         = mm;
     spa.day           = dd;
     spa.hour          = hr;
     spa.minute        = mmin;
     spa.second        = ssec;
-    spa.timezone      = -4; // Pittsburgh
-    spa.delta_ut1     = 0.3; // constant for 2017
-    spa.delta_t       = 69.1; // constant for 2017
-    spa.longitude     = -79.958767; //Pittsburgh
-    spa.latitude      = 40.443651; //Pittsburgh
-    spa.elevation     = 40; // Height of building
+    spa.timezone      = TIMEZONE;
+    spa.delta_ut1     = DELTA_UT1;
+    spa.delta_t       = DELTA_T; 
+    spa.longitude     = lo; //Pittsburgh
+    spa.latitude      = la; //Pittsburgh
+    spa.elevation     = hei;
     spa.pressure      = 1013.25; 
     spa.temperature   = 15;
     spa.slope         = 0;
@@ -115,6 +172,42 @@ int main (int argc, char *argv[])
         printf("Sunset:        %02d:%02d:%02d Local Time\n", (int)(spa.sunset), (int)min, (int)sec);
 
     } else printf("SPA Error Code: %d\n", result);
+
+	printf("\nPress ENTER to continue writing lookup table of the day .. ");
+	getchar();
+	getchar();
+
+	// Write lookup table for the day into file and print
+	printf("UPDATE_PEIORD = %d\n", UPDATE_PEIORD);
+	fprintf(filePtr, "UPDATE_PEIORD = %ds\n", UPDATE_PEIORD);
+    for (int i = 0; i < (60*60*24/UPDATE_PEIORD); i++) {
+        yy = timePtr->tm_year + 1900;
+        mm = timePtr->tm_mon + 1;
+        dd = timePtr->tm_mday;
+        hr = timePtr->tm_hour;
+        mmin = timePtr->tm_min;
+        ssec = timePtr->tm_sec;
+
+        spa.year          = yy;
+        spa.month         = mm;
+        spa.day           = dd;
+        spa.hour          = hr;
+        spa.minute        = mmin;
+        spa.second        = ssec;
+        result = spa_calculate(&spa);
+        if (result != 0) {
+            printf("SPA Error Code: %d\n", result);
+            break;
+        }
+
+        sprintf(location_result, "%4d-%02d-%02d %02d:%02d:%02d Evaluation: % 4.3f Azimuth: %.3f\n", 
+                yy, mm, dd, hr, mmin, ssec, 90-spa.zenith, spa.azimuth);
+        printf("%s", location_result);
+        fprintf(filePtr, "%s", location_result);
+
+        timePtr->tm_sec += UPDATE_PEIORD;
+        mktime(timePtr);
+    }
 
     return 0;
 }
